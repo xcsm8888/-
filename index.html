@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>USDT 智能搬砖系统 V5.7 (Balance Fix)</title>
+    <title>USDT 智能搬砖系统 V5.8 (Wheel Logic Fix)</title>
     
     <!-- 依赖库 -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -86,12 +86,12 @@
                 "🛡️ 安全提示：平台客服不会索要您的私钥，请警惕假冒账号。"
             ],
             announcements: [
-                { id: 1, type: 'intro', title: "什么是 USDT 智能搬砖？新手入门必读", date: "2025-11-01", content: "USDT 智能搬砖系统基于先进的 AI 聚合交易算法..." },
-                { id: 2, type: 'intro', title: "USDI 权益通证介绍：收益翻倍的秘密", date: "2025-11-01", content: "USDI 是本平台发行的核心权益通证..." },
-                { id: 3, type: 'edu', title: "搬砖教学：如何选择最佳锁仓周期？", date: "2025-10-31", content: "为了满足不同用户的资金流动性需求..." },
-                { id: 4, type: 'safe', title: "【重要】严厉打击利用假冒 USDT 充值", date: "2025-10-10", content: "近期监测到少量恶意用户尝试使用假冒代币..." },
-                { id: 5, type: 'sys', title: "平台 APP iOS 版本 TestFlight 更新通知", date: "2025-09-07", content: "iOS 用户请注意，最新的 TestFlight 测试版 v5.4 已发布..." },
-                { id: 6, type: 'safe', title: "关于近期防范网络诈骗的风险提示", date: "2025-08-18", content: "尊敬的用户：近期网络诈骗频发..." },
+                { id: 1, type: 'intro', title: "什么是 USDT 智能搬砖？新手入门必读", date: "2025-11-01", content: "USDT 智能搬砖系统基于先进的 AI 聚合交易算法，自动在全网 48 个去中心化交易所（DEX）和中心化交易所（CEX）之间寻找价差。\n\n例如：Binance 的 ETH 价格为 3000U，而 Uniswap 为 3010U。系统会自动在 Binance 买入并在 Uniswap 卖出，扣除手续费后的差价即为利润。\n\n我们的系统优势：\n1. 毫秒级高频交易\n2. 智能合约保障本金\n3. 0 门槛自动运行" },
+                { id: 2, type: 'intro', title: "USDI 权益通证介绍：收益翻倍的秘密", date: "2025-11-01", content: "USDI 是本平台发行的核心权益通证，与 USDT 保持 1:1 刚性兑付。\n\n持有 USDI 参与量化的优势：\n1. 专属高收益：使用 USDI 搬砖，日化收益率额外增加 0.2%。\n2. 手续费减免：USDI 提现免除 TRC20 链上矿工费。\n3. 生态应用：未来可用于参与平台治理投票及 NFT 抢购。\n\n如何获取：可在首页通过 USDT 1:1 无损兑换获取。" },
+                { id: 3, type: 'edu', title: "搬砖教学：如何选择最佳锁仓周期？", date: "2025-10-31", content: "为了满足不同用户的资金流动性需求，我们提供 1-30 天不等的灵活周期。\n\n- 短期（1-7天）：适合新手体验，资金回笼快，日化收益 0.5% - 0.6%。\n- 中期（7-15天）：平衡收益与流动性，日化收益 0.6% - 0.7%。\n- 长期（15-30天）：最大化复利效应，日化收益 0.7% - 0.8% 以上。\n\n建议：根据您的资金闲置时间选择，长期复利收益最可观。" },
+                { id: 4, type: 'safe', title: "【重要】严厉打击利用假冒 USDT 充值", date: "2025-10-10", content: "近期监测到少量恶意用户尝试使用假冒代币（Fake Token）充值。\n\n平台风控系统已全面升级：\n1. 充值地址必须为 TRC20 标准合约地址。\n2. 智能合约会自动验证代币合约地址是否为 Tether 官方地址。\n3. 任何恶意攻击行为一经发现，将永久冻结账号并上报相关执法机构。\n\n请大家共同维护良好的投资环境。" },
+                { id: 5, type: 'sys', title: "平台 APP iOS 版本 TestFlight 更新通知", date: "2025-09-07", content: "iOS 用户请注意，最新的 TestFlight 测试版 v5.4 已发布。\n\n更新内容：\n1. 优化了行情数据的加载速度。\n2. 修复了部分机型转盘动画卡顿的问题。\n3. 新增了资产明细导出功能。\n\n请前往 TestFlight 应用内点击更新。Android 用户无需操作，后台自动热更新。" },
+                { id: 6, type: 'safe', title: "关于近期防范网络诈骗的风险提示", date: "2025-08-18", content: "尊敬的用户：\n近期网络诈骗频发，请注意以下几点：\n1. 平台官方客服不会主动私聊您索要密码或私钥。\n2. 认准官方域名，勿点不明链接。\n3. 任何声称“稳赚不赔”且不仅限本平台的项目，请提高警惕。\n\n遇到可疑情况，请立即联系 APP 内在线客服举报。" },
             ],
             prizes: [
                 { id: 1, name: '2 USDT', type: 'USDT', value: 2, color: '#ecfdf5', text: '#059669', probability: 48 }, 
@@ -272,9 +272,22 @@
                     if (random < 0) { selectedIndex = i; break; }
                 }
                 const winningPrize = prizes[selectedIndex];
-                const rounds = 5 + Math.floor(Math.random() * 3);
-                const targetRotation = rotation + (360 * rounds) + (360 - (selectedIndex * segmentAngle) - (segmentAngle/2));
-                setRotation(targetRotation);
+                
+                // --- 核心修复：计算旋转角度逻辑 (防止累积误差) ---
+                const rounds = 5 + Math.floor(Math.random() * 3); // 随机转 5-7 圈
+                const currentAngle = rotation % 360; // 当前角度
+                // 目标角度：360 - (index * 45 + 22.5) -> 指针指向上方 (0度)
+                // 解释：CSS rotate 是顺时针。如果 index 0 在 0-45度，中心 22.5。要让 22.5 转到 0，需要逆时针转 22.5，或者顺时针转 360-22.5 = 337.5。
+                const targetAngle = (360 - (selectedIndex * segmentAngle) - (segmentAngle / 2)) % 360; 
+                
+                let diff = targetAngle - currentAngle;
+                if (diff < 0) diff += 360; // 保证顺时针旋转
+                diff += 360 * rounds; // 加上圈数
+                
+                const newRotation = rotation + diff; // 累加绝对角度
+                // ------------------------------------------------
+
+                setRotation(newRotation);
 
                 setTimeout(() => {
                     setSpinning(false);
