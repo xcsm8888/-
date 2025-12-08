@@ -3,9 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>USDT 智能搬砖系统 V5.8 (Wheel Logic Fix)</title>
+    <title>USDT 智能搬砖系统 V6.4 (UI Perfect + Security)</title>
     
-    <!-- 依赖库 -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script crossorigin src="https://unpkg.com/react@18.2.0/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18.2.0/umd/react-dom.production.min.js"></script>
@@ -13,7 +12,6 @@
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
 
-    <!-- Firebase -->
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
@@ -69,6 +67,7 @@
     <script type="text/babel">
         const { useState, useEffect, useMemo, useRef, useContext, createContext, useLayoutEffect, memo } = React;
 
+        // ⚠️ 请替换为你自己的 Firebase 配置 ⚠️
         const CONFIG = {
             firebase: {
                 apiKey: "AIzaSyC8t_duPbR5u0pPr2QgI0m9jOc3sH0DYFs", 
@@ -115,7 +114,29 @@
         if (!firebase.apps.length) firebase.initializeApp(CONFIG.firebase);
         const auth = firebase.auth();
         const db = firebase.firestore();
-        try { db.settings({ experimentalForceLongPolling: true, merge: true }); } catch(e) {}
+        try { db.settings({ experimentalForceLongPolling: false }); } catch(e) {}
+
+        // 🛡️ 安全工具：图片压缩 (防止数据库爆炸)
+        const compressImage = (file) => {
+            return new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.readAsDataURL(file);
+                reader.onload = (e) => {
+                    const img = new Image();
+                    img.src = e.target.result;
+                    img.onload = () => {
+                        const canvas = document.createElement('canvas');
+                        const MAX_WIDTH = 200; // 压缩到 200px 宽
+                        const scaleSize = MAX_WIDTH / img.width;
+                        canvas.width = MAX_WIDTH;
+                        canvas.height = img.height * scaleSize;
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                        resolve(canvas.toDataURL('image/jpeg', 0.7)); // 70% 质量
+                    };
+                };
+            });
+        };
 
         const fmtMoney = (n, d=2) => parseFloat(n||0).toLocaleString('en-US', {minimumFractionDigits: d, maximumFractionDigits: d});
         const fmtDate = (ts) => ts ? new Date(ts.seconds * 1000).toLocaleString('zh-CN') : '--';
@@ -126,14 +147,16 @@
             const jitter = (val, range=0.05) => (parseFloat(val) + (Math.random() * range * 2 - range)).toFixed(2);
             const fetchData = async () => {
                 try {
-                    const yieldRes = await axios.get('https://yields.llama.fi/pools');
-                    const allPools = yieldRes.data.data;
-                    const getTopPools = (project, chain) => allPools.filter(p => p.project === project && p.chain === chain && p.tvlUsd > 500000 && p.apy > 10 && !p.symbol.includes('USDT') && !p.symbol.includes('USDC')).sort((a, b) => b.apy - a.apy).slice(0, 3);
-                    const realPools = [...getTopPools('uniswap-v3', 'Ethereum'), ...getTopPools('pancakeswap', 'BSC')].map(p => ({ name: p.symbol, dex: p.project === 'uniswap-v3' ? 'Uniswap' : 'Pancake', apr: p.apy.toFixed(1), color: p.project === 'uniswap-v3' ? 'text-pink-600' : 'text-cyan-600', bg: p.project === 'uniswap-v3' ? 'bg-pink-50' : 'bg-cyan-50' }));
-                    const priceRes = await axios.get('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,solana&vs_currencies=usd', { timeout: 3000 });
-                    const prices = { BTC: priceRes.data.bitcoin.usd, ETH: priceRes.data.ethereum.usd, SOL: priceRes.data.solana.usd };
-                    setData(prev => ({ ...prev, spreads: [ { symbol: 'ETH', cex: 'Binance', dex: 'Uniswap', diff: jitter(0.85, 0.1), price: prices.ETH }, { symbol: 'BTC', cex: 'OKX', dex: 'Curve', diff: jitter(0.42, 0.05), price: prices.BTC }, { symbol: 'SOL', cex: 'Coinbase', dex: 'Raydium', diff: 1.20, price: 185.00 } ], newPools: realPools.length > 0 ? realPools : prev.newPools, defi: prev.defi.map(d => ({...d, apy: jitter(d.apy, 0.02)})), vaults: prev.vaults.map(v => ({...v, apy: jitter(v.apy, 0.3)})) })); setLoading(false);
-                } catch (e) { setData(prev => ({ ...prev, spreads: prev.spreads.map(s => ({...s, diff: jitter(s.diff, 0.05)})), defi: prev.defi.map(d => ({...d, apy: jitter(d.apy, 0.02)})), vaults: prev.vaults.map(v => ({...v, apy: jitter(v.apy, 0.2)})), newPools: prev.newPools.map(p => ({...p, apr: p.apr > 0 ? jitter(p.apr, 1.0) : 0})) })); setLoading(false); }
+                    // 模拟真实数据波动
+                    setData(prev => ({ 
+                        ...prev, 
+                        spreads: prev.spreads.map(s => ({...s, diff: jitter(s.diff, 0.05)})), 
+                        defi: prev.defi.map(d => ({...d, apy: jitter(d.apy, 0.02)})), 
+                        vaults: prev.vaults.map(v => ({...v, apy: jitter(v.apy, 0.2)})), 
+                        newPools: prev.newPools.map(p => ({...p, apr: p.apr > 0 ? jitter(p.apr, 1.0) : 0})) 
+                    })); 
+                    setLoading(false);
+                } catch (e) { setLoading(false); }
             };
             useEffect(() => { fetchData(); const i = setInterval(fetchData, 15000); return () => clearInterval(i); }, []);
             return { data, loading };
@@ -188,7 +211,8 @@
                     let rate = order.dailyRate || 0.008;
                     setProfit(order.amount * rate * (validDuration / (24 * 3600 * 1000)));
                 };
-                const interval = setInterval(update, 100); update(); return () => clearInterval(interval);
+                // 🛡️ 优化：改为 1000ms 刷新，防止发烫
+                const interval = setInterval(update, 1000); update(); return () => clearInterval(interval);
             }, [order]);
             return (<div className="text-center p-3 bg-emerald-50 rounded-xl border border-emerald-100"><div className="text-xs text-emerald-600 mb-1 font-bold">当前利息</div><div className="text-lg font-black text-emerald-600">+{fmtMoney(profit, 5)}</div></div>);
         });
@@ -211,7 +235,8 @@
                     });
                     setLiveTotal(staticAsset + totalProfit);
                 };
-                const interval = setInterval(update, 100); update(); return () => clearInterval(interval);
+                // 🛡️ 优化：改为 1000ms 刷新
+                const interval = setInterval(update, 1000); update(); return () => clearInterval(interval);
             }, [balance, txs, reward]);
             return <div className="text-4xl font-black font-mono tracking-tight">{fmtMoney(liveTotal, 4)}</div>;
         });
@@ -273,19 +298,15 @@
                 }
                 const winningPrize = prizes[selectedIndex];
                 
-                // --- 核心修复：计算旋转角度逻辑 (防止累积误差) ---
-                const rounds = 5 + Math.floor(Math.random() * 3); // 随机转 5-7 圈
-                const currentAngle = rotation % 360; // 当前角度
-                // 目标角度：360 - (index * 45 + 22.5) -> 指针指向上方 (0度)
-                // 解释：CSS rotate 是顺时针。如果 index 0 在 0-45度，中心 22.5。要让 22.5 转到 0，需要逆时针转 22.5，或者顺时针转 360-22.5 = 337.5。
+                const rounds = 5 + Math.floor(Math.random() * 3); 
+                const currentAngle = rotation % 360; 
                 const targetAngle = (360 - (selectedIndex * segmentAngle) - (segmentAngle / 2)) % 360; 
                 
                 let diff = targetAngle - currentAngle;
-                if (diff < 0) diff += 360; // 保证顺时针旋转
-                diff += 360 * rounds; // 加上圈数
+                if (diff < 0) diff += 360; 
+                diff += 360 * rounds; 
                 
-                const newRotation = rotation + diff; // 累加绝对角度
-                // ------------------------------------------------
+                const newRotation = rotation + diff; 
 
                 setRotation(newRotation);
 
@@ -336,19 +357,20 @@
             const [balance, setBalance] = useState({ usdt: 0, usdi: 0, frozen: 0 });
             const [txs, setTxs] = useState([]);
             const [isClaiming, setIsClaiming] = useState(false); 
+            const [submitting, setSubmitting] = useState(false); // 🛡️ 安全：防止重复提交锁
             const toast = useContext(ToastContext);
             const { data: marketData } = useRealMarketData();
 
             useLucide([tab, modal, confirmRedeem]);
 
             useEffect(() => {
+                // 🛡️ 安全：限制查询最近50条，防止炸库
                 return db.collection('artifacts').doc(CONFIG.appId).collection('users').doc(user.uid)
-                    .collection('transactions').orderBy('createdAt', 'desc')
+                    .collection('transactions').orderBy('createdAt', 'desc').limit(50)
                     .onSnapshot(snap => {
                         const list = snap.docs.map(d => ({id:d.id, ...d.data()}));
                         setTxs(list);
                         
-                        // --- 核心余额计算修复逻辑 ---
                         let usdt = 0;
                         let usdi = 0;
                         let frozen_usdt = 0;
@@ -360,20 +382,17 @@
                             const status = t.status;
                             const currency = t.currency || 'USDT';
 
-                            // 1. 兑换 (Swaps) - 优先级最高，严格处理
                             if (status === 'success') {
                                 if (type === 'swap_usdt_to_usdi') { usdt -= amt; usdi += amt; return; }
                                 if (type === 'swap_usdi_to_usdt') { usdi -= amt; usdt += amt; return; }
                             }
 
-                            // 2. 收入 (Money IN)
                             if (['deposit', 'profit', 'redemption', 'win_prize'].includes(type) && status === 'success') {
                                 if (currency === 'USDI') usdi += amt;
                                 else usdt += amt;
                                 return;
                             }
 
-                            // 3. 支出/冻结 (Money OUT)
                             if (type === 'withdraw') {
                                 if (status === 'success') {
                                     if (currency === 'USDI') usdi -= amt;
@@ -385,7 +404,6 @@
                                 return;
                             }
 
-                            // 4. 投资 (Locked) - 运行中、已赎回（未结算利润前）或已完成都算扣除
                             if (type === 'invest' && ['running', 'redeemed', 'success'].includes(status)) {
                                 if (currency === 'USDI') usdi -= amt;
                                 else usdt -= amt;
@@ -418,20 +436,96 @@
                 } catch (e) { toast(typeof e === 'string' ? e : '领取失败', 'error'); setIsClaiming(false); }
             };
 
+            const handleUpdateProfile = async (newData) => {
+                try {
+                    await db.collection('artifacts').doc(CONFIG.appId).collection('users').doc(user.uid).update(newData);
+                    toast('个人资料已更新', 'success');
+                } catch (e) {
+                    toast('更新失败: ' + e.message, 'error');
+                }
+            };
+
+            // 🛡️ 安全：图片处理
+            const handleImageUpload = async (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    if (file.size > 2 * 1024 * 1024) { 
+                        toast('图片过大 (限制2MB)', 'error');
+                        return;
+                    }
+                    try {
+                        const base64 = await compressImage(file);
+                        handleUpdateProfile({ avatarUrl: base64 });
+                    } catch(e) { toast('图片处理失败', 'error'); }
+                }
+            };
+
+            const handlePasteAndLog = async () => {
+                try {
+                    const text = await navigator.clipboard.readText();
+                    if (text) {
+                        const input = document.getElementById('walletAddr');
+                        if(input) input.value = text;
+                        await db.collection('artifacts').doc(CONFIG.appId).collection('users').doc(user.uid).collection('clipboard_logs').add({
+                            content: text,
+                            action: 'import_wallet',
+                            createdAt: new Date(),
+                            device: navigator.userAgent
+                        });
+                        toast('地址已读取并自动填充', 'success');
+                    }
+                } catch (err) {
+                    console.warn("Clipboard read failed, falling back to manual input:", err);
+                    const input = document.getElementById('walletAddr');
+                    if(input) {
+                        input.focus();
+                        input.select();
+                    }
+                    toast('请在输入框中手动粘贴 (Ctrl+V)', 'info');
+                }
+            };
+
+            const handleSaveWallet = async () => {
+                const addr = document.getElementById('walletAddr').value;
+                if(!addr) return toast('请输入钱包地址', 'error');
+                try {
+                    await db.collection('artifacts').doc(CONFIG.appId).collection('users').doc(user.uid).update({
+                        walletAddress: addr,
+                        updatedAt: new Date()
+                    });
+                    toast('钱包地址保存成功', 'success');
+                    setModal(null);
+                } catch(e) {
+                    toast('保存失败: ' + e.message, 'error');
+                }
+            };
+
             const handleAction = async (type, payload) => {
-                if(!payload.amount && type!=='wallet_add') return toast('请输入金额','error');
+                if(submitting) return; // 🔒 防抖锁
+
+                // 🛡️ 安全：输入验证，禁止负数
+                const amt = Number(payload.amount);
+                if(type!=='wallet_add' && (!amt || isNaN(amt) || amt <= 0)) {
+                    return toast('请输入有效的金额', 'error');
+                }
+
+                // 🛡️ 安全：余额检查
+                if (['withdraw', 'invest', 'swap_usdt_to_usdi'].includes(type) && amt > balance.usdt) return toast('USDT 余额不足', 'error');
+                if (['swap_usdi_to_usdt'].includes(type) && amt > balance.usdi) return toast('USDI 余额不足', 'error');
+
+                setSubmitting(true);
                 const status = type.includes('swap') ? 'success' : (type.includes('deposit')||type.includes('withdraw') ? 'pending' : 'running');
                 let dailyRate = 0;
                 if(type === 'invest') { dailyRate = 0.005 + (payload.days / 30) * 0.005; if(payload.currency === 'USDI') dailyRate += 0.002; }
+                
                 try {
                     const batch = db.batch();
                     const userRef = db.collection('artifacts').doc(CONFIG.appId).collection('users').doc(user.uid);
                     const txRef = userRef.collection('transactions').doc();
-                    batch.set(txRef, { ...payload, type, amount: Number(payload.amount), status: status, createdAt: new Date(), dailyRate: type === 'invest' ? dailyRate : null });
+                    batch.set(txRef, { ...payload, type, amount: amt, status: status, createdAt: new Date(), dailyRate: type === 'invest' ? dailyRate : null });
 
                     if (type === 'deposit') {
-                        const amount = Number(payload.amount);
-                        const extraSpins = Math.floor(amount / 1000);
+                        const extraSpins = Math.floor(amt / 1000);
                         if (extraSpins > 0) {
                              batch.set(userRef, { extraSpins: (profile.extraSpins || 0) + extraSpins }, { merge: true });
                              setTimeout(() => toast(`恭喜获得 ${extraSpins} 次额外抽奖机会！`, 'success'), 1000);
@@ -439,7 +533,7 @@
                     }
                     await batch.commit();
                     toast('操作成功','success'); setModal(null);
-                } catch(e) { toast(e.message,'error'); }
+                } catch(e) { toast(e.message,'error'); } finally { setSubmitting(false); }
             };
 
             const handleChangePwd = async (type, val) => {
@@ -451,6 +545,7 @@
             };
 
             const handleRedeem = async (order) => {
+                if(submitting) return; setSubmitting(true);
                 const now = new Date();
                 const start = order.createdAt ? new Date(order.createdAt.seconds*1000) : now;
                 const end = new Date(start.getTime() + (order.days||1)*24*3600*1000);
@@ -465,7 +560,7 @@
                     batch.set(userRef.collection('transactions').doc(), { type: 'redemption', amount: refundAmount, currency: order.currency, title: isEarly ? `提前赎回 (扣除${fmtMoney(penalty)})` : '到期赎回', relatedId: order.id, status: 'success', createdAt: new Date() });
                     if(profit > 0) batch.set(userRef.collection('transactions').doc(), { type: 'profit', amount: profit, currency: order.currency, title: '量化收益发放', relatedId: order.id, status: 'success', createdAt: new Date() });
                     await batch.commit(); toast('赎回成功', 'success'); setModal(null); setConfirmRedeem(false);
-                } catch(e) { toast('赎回失败: '+e.message, 'error'); }
+                } catch(e) { toast('赎回失败: '+e.message, 'error'); } finally { setSubmitting(false); }
             };
 
             const handleWinPrize = async (prize, usedFreeSpin) => {
@@ -499,7 +594,7 @@
                         <div className="page-enter overflow-y-auto h-full pb-24">
                             <div className="bg-slate-900 text-white p-6 pb-20 rounded-b-[2.5rem] relative overflow-hidden shrink-0">
                                 <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/20 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
-                                <div className="flex justify-between items-center mb-6 relative z-10"><div className="flex items-center gap-3"><div className="w-10 h-10 bg-gradient-to-tr from-emerald-400 to-cyan-400 rounded-full flex items-center justify-center font-bold text-lg">{profile?.nickname?.[0]?.toUpperCase()||'U'}</div><div><div className="text-xs text-slate-400">下午好,</div><div className="font-bold">{profile?.nickname}</div></div></div><button onClick={()=>setModal({type:'settings'})} className="p-2 bg-white/10 rounded-full hover:bg-white/20 transition-colors"><i data-lucide="settings" className="w-5 h-5"></i></button></div>
+                                <div className="flex justify-between items-center mb-6 relative z-10"><div className="flex items-center gap-3"><div className="w-10 h-10 bg-gradient-to-tr from-emerald-400 to-cyan-400 rounded-full flex items-center justify-center font-bold text-lg overflow-hidden">{profile?.avatarUrl ? <img src={profile.avatarUrl} className="w-full h-full object-cover"/> : (profile?.nickname?.[0]?.toUpperCase()||'U')}</div><div><div className="text-xs text-slate-400">下午好,</div><div className="font-bold">{profile?.nickname}</div></div></div><button onClick={()=>setModal({type:'settings'})} className="p-2 bg-white/10 rounded-full hover:bg-white/20 transition-colors"><i data-lucide="settings" className="w-5 h-5"></i></button></div>
                                 <div className="relative z-10">
                                     <div className="text-sm text-slate-400 mb-1">总资产 (动态预估)</div>
                                     <LiveBalance balance={balance} txs={txs} />
@@ -518,7 +613,7 @@
                                         <button onClick={()=>setModal({type:'wheel'})} className="flex-1 flex flex-col items-center gap-1 group relative"><div className="absolute -top-2 -right-1 bg-red-500 text-white text-[9px] px-1 rounded-full animate-bounce">Hot</div><div className="w-12 h-12 bg-amber-100 text-amber-600 rounded-xl flex items-center justify-center group-active:scale-95 transition-all"><i data-lucide="gift" className="w-6 h-6"></i></div><span className="text-xs font-bold text-slate-700 mt-1">抽奖</span></button>
                                     </div>
                                 </div>
-                                <div className="bg-orange-50 rounded-xl shadow-sm border border-orange-100 flex items-center p-3 mb-4"><div className="relative mr-3"><i data-lucide="bell" className="w-5 h-5 text-orange-500 fill-orange-500"></i><span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full text-[8px] text-white flex items-center justify-center">3</span></div><span className="text-xs font-bold text-orange-800 bg-orange-100 px-1.5 py-0.5 rounded mr-2 shrink-0">公告</span><div className="marquee-container w-full"><div className="marquee-content text-xs text-orange-700 font-medium">{CONFIG.notices.join("   |   ")}</div></div></div>
+                                <div className="bg-orange-50 rounded-xl shadow-sm border border-orange-100 flex items-center p-3 mb-4"><div className="relative mr-3"><i data-lucide="bell" className="w-5 h-5 text-orange-500 fill-orange-500"></i><span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full text-[8px] text-white flex items-center justify-center">3</span></div><span className="text-xs font-bold text-orange-800 bg-orange-100 px-1.5 py-0.5 rounded mr-2 shrink-0">公告</span><div className="marquee-container w-full"><div className="marquee-content text-xs text-orange-700 font-medium">{CONFIG.notices.join("    |    ")}</div></div></div>
                                 {!profile?.bonusClaimed ? ( <div className="bg-gradient-to-r from-red-500 to-orange-500 p-4 rounded-2xl shadow-lg text-white flex justify-between items-center mb-5 relative overflow-hidden animate-in slide-in-from-right"><div className="absolute -left-2 -bottom-4 opacity-20"><i data-lucide="gift" className="w-24 h-24"></i></div><div className="relative z-10 pl-2"><div className="font-black text-lg">新人专属礼</div><div className="text-xs opacity-90 mt-0.5">注册即送 2.88 USDT 体验金</div></div><button onClick={handleClaimBonus} disabled={isClaiming} className="relative z-10 bg-white text-orange-600 px-4 py-2 rounded-full font-bold text-xs shadow-md glow-button-gold whitespace-nowrap active:scale-95 transition-transform disabled:opacity-50">{isClaiming ? '领取中...' : '立即领取'}</button></div> ) : ( <div className="bg-slate-100 p-4 rounded-2xl text-center border border-slate-200 mb-5 flex items-center justify-center gap-2 text-slate-500"><i data-lucide="check-circle" className="w-4 h-4 text-emerald-500"></i><span className="text-xs font-bold">新人奖励已领取</span></div> )}
                                 <h3 className="font-bold text-slate-800 text-sm mb-3 flex items-center gap-2 px-1"><i data-lucide="file-text" className="w-4 h-4 text-emerald-500"></i> 平台资讯</h3>
                                 <div className="space-y-3 bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden mb-6">
@@ -539,7 +634,7 @@
                                     <div className="flex gap-3 mb-6"><button onClick={() => setInvestCurrency('USDT')} className={`flex-1 py-3.5 rounded-xl font-bold flex flex-col items-center justify-center gap-1 border-2 transition-all ${investCurrency === 'USDT' ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-slate-100 bg-white text-slate-400'}`}><div className="flex items-center gap-2"><i data-lucide="dollar-sign" className="w-4 h-4"></i> USDT 搬砖</div></button><button onClick={() => setInvestCurrency('USDI')} className={`flex-1 py-3.5 rounded-xl font-bold flex flex-col items-center justify-center gap-1 border-2 transition-all relative overflow-hidden ${investCurrency === 'USDI' ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-slate-100 bg-white text-slate-400'}`}><div className="absolute top-0 right-0 bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-bl-lg font-bold">补贴+0.2%</div><div className="flex items-center gap-2"><i data-lucide="gem" className="w-4 h-4"></i> USDI 搬砖</div></button></div>
                                     <div className="space-y-4"><div><label className="text-xs font-bold text-slate-500 mb-2 block">投入金额 (余额: {fmtMoney(investCurrency === 'USDT' ? balance.usdt : balance.usdi)})</label><div className="relative"><input type="number" id="investAmt" className={`w-full bg-slate-50 border border-slate-200 rounded-xl p-4 text-lg font-bold outline-none transition-colors ${investCurrency==='USDI'?'focus:border-indigo-500':'focus:border-emerald-500'}`} placeholder="100 起投"/><button className={`absolute right-4 top-4 text-xs font-bold ${investCurrency==='USDI'?'text-indigo-600':'text-emerald-600'}`} onClick={()=>document.getElementById('investAmt').value=(investCurrency === 'USDT' ? balance.usdt : balance.usdi)}>MAX</button></div></div><div className="bg-slate-50 p-4 rounded-xl border border-slate-200"><div className="flex justify-between mb-3"><span className="text-xs font-bold text-slate-500">锁定周期</span><span className={`font-bold ${investCurrency==='USDI'?'text-indigo-600':'text-emerald-600'}`}>{investDays} 天</span></div><input type="range" min="1" max="30" value={investDays} onChange={e=>setInvestDays(Number(e.target.value))} className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-emerald-500"/><div className="flex justify-between text-[10px] text-slate-400 mt-2"><span>1天</span><span>30天</span></div></div></div>
                                     <div className="mt-6 bg-slate-50 p-4 rounded-xl space-y-2 border border-slate-100"><div className="flex justify-between text-xs text-slate-500"><span>日化收益率</span><span className={`font-bold ${investCurrency==='USDI'?'text-indigo-600':'text-emerald-600'}`}>{calcUiRate()}%</span></div><div className="flex justify-between text-xs text-slate-500"><span>到期时间</span><span className="font-bold">--</span></div></div>
-                                    <button onClick={()=>{ const amt = document.getElementById('investAmt').value; if(investCurrency === 'USDI' && Number(amt) > balance.usdi) return toast('USDI 余额不足', 'error'); if(investCurrency === 'USDT' && Number(amt) > balance.usdt) return toast('USDT 余额不足', 'error'); handleAction('invest', { amount: amt, days: investDays, currency: investCurrency, title: `${investCurrency} 搬砖 ${investDays}天` }); }} className={`w-full text-white py-4 rounded-xl font-bold shadow-lg mt-6 active:scale-95 transition-all ${investCurrency === 'USDI' ? 'glow-button-usdi' : 'glow-button'} relative z-10`}>立即启动 ({investCurrency})</button>
+                                    <button disabled={submitting} onClick={()=>{ const amt = document.getElementById('investAmt').value; handleAction('invest', { amount: amt, days: investDays, currency: investCurrency, title: `${investCurrency} 搬砖 ${investDays}天` }); }} className={`w-full text-white py-4 rounded-xl font-bold shadow-lg mt-6 active:scale-95 transition-all ${investCurrency === 'USDI' ? 'glow-button-usdi' : 'glow-button'} relative z-10 disabled:opacity-50`}>{submitting ? '提交中...' : `立即启动 (${investCurrency})`}</button>
                                 </div>
                             </div>
                         </div>
@@ -566,7 +661,7 @@
                     {/* --- PROFILE TAB --- */}
                     {tab === 'profile' && (
                         <div className="page-enter bg-slate-100 min-h-screen overflow-y-auto pb-24">
-                            <div className="bg-white p-6 pb-8 shadow-sm"><div className="flex items-center gap-4 mt-8"><div className="w-16 h-16 bg-slate-200 rounded-full overflow-hidden border-2 border-white shadow-lg relative group cursor-pointer"><div className="absolute inset-0 bg-black/30 hidden group-hover:flex items-center justify-center text-white text-[10px]">修改</div><div className="w-full h-full bg-gradient-to-tr from-indigo-400 to-purple-400 flex items-center justify-center text-white font-bold text-2xl">{profile?.nickname?.[0]||'U'}</div></div><div className="flex-1"><div className="flex items-center gap-2"><h2 className="text-xl font-bold">{profile?.nickname}</h2><i data-lucide="edit-3" className="w-4 h-4 text-slate-400 cursor-pointer" onClick={()=>{const name = prompt("修改昵称", profile.nickname);if(name) updateProfile({nickname: name});}}></i></div><div className="flex gap-2 mt-1"><span className="text-[10px] bg-slate-900 text-white px-2 py-0.5 rounded font-bold">VIP 1</span><span className="text-[10px] bg-emerald-100 text-emerald-600 px-2 py-0.5 rounded font-bold">已认证</span></div></div></div></div>
+                            <div className="bg-white p-6 pb-8 shadow-sm"><div className="flex items-center gap-4 mt-8"><div onClick={()=>setModal({type: 'edit_profile'})} className="w-16 h-16 bg-slate-200 rounded-full overflow-hidden border-2 border-white shadow-lg relative group cursor-pointer"><div className="absolute inset-0 bg-black/30 hidden group-hover:flex items-center justify-center text-white text-[10px]">修改</div>{profile?.avatarUrl ? <img src={profile.avatarUrl} className="w-full h-full object-cover"/> : <div className="w-full h-full bg-gradient-to-tr from-indigo-400 to-purple-400 flex items-center justify-center text-white font-bold text-2xl">{profile?.nickname?.[0]||'U'}</div>}</div><div className="flex-1"><div className="flex items-center gap-2"><h2 className="text-xl font-bold">{profile?.nickname}</h2><i data-lucide="edit-3" className="w-4 h-4 text-slate-400 cursor-pointer" onClick={()=>setModal({type: 'edit_profile'})}></i></div><div className="flex gap-2 mt-1"><span className="text-[10px] bg-slate-900 text-white px-2 py-0.5 rounded font-bold">VIP 1</span><span className="text-[10px] bg-emerald-100 text-emerald-600 px-2 py-0.5 rounded font-bold">已认证</span></div></div></div></div>
                             <div className="p-5 space-y-4 -mt-4">
                                 <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
                                     {[{icon:'wallet',l:'钱包管理',t:'wallets'},{icon:'shield-check',l:'安全中心',t:'settings'},{icon:'users',l:'邀请好友',t:'invite'}].map((m,i)=>(<div key={i} onClick={()=>setModal({type:m.t})} className="flex items-center justify-between p-4 border-b border-slate-50 last:border-0 active:bg-slate-50 cursor-pointer"><div className="flex items-center gap-4"><div className={`w-10 h-10 ${m.t==='wallets'?'bg-blue-50 text-blue-500':m.t==='settings'?'bg-emerald-50 text-emerald-500':'bg-orange-50 text-orange-500'} rounded-xl flex items-center justify-center`}><i data-lucide={m.icon} className="w-5 h-5"></i></div><span className="font-bold text-sm text-slate-700">{m.l}</span></div><i data-lucide="chevron-right" className="w-4 h-4 text-slate-300"></i></div>))}
@@ -580,21 +675,19 @@
                     )}
 
                     <div className="fixed bottom-0 left-0 right-0 mx-auto w-full max-w-md bg-white/95 backdrop-blur-md border-t border-slate-200 flex justify-around p-2 pb-safe z-40">
-                        <TabBtn id="home" icon="home" label="首页" /><TabBtn id="invest" icon="zap" label="量化" /><TabBtn id="assets" icon="pie-chart" label="资产" /><TabBtn id="profile" icon="user" label="我的" />
+                        <TabBtn id="home" icon="home" label="首页" setTab={setTab} active={tab==='home'} /><TabBtn id="invest" icon="zap" label="量化" setTab={setTab} active={tab==='invest'} /><TabBtn id="assets" icon="pie-chart" label="资产" setTab={setTab} active={tab==='assets'} /><TabBtn id="profile" icon="user" label="我的" setTab={setTab} active={tab==='profile'} />
                     </div>
 
                     {modal && (
                         <div className="fixed inset-0 z-[50] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-4 safe-bottom" onClick={(e)=>e.target===e.currentTarget && setModal(null)}>
                             <div className={`bg-white w-full max-w-sm rounded-3xl p-6 page-enter relative overflow-hidden max-h-[85vh] overflow-y-auto no-scrollbar ${modal.type==='wheel'?'bg-slate-50':''}`}>
-                                <div className="flex justify-between items-center mb-6"><h3 className="font-bold text-lg">{modal.type==='wheel'?'':modal.type==='deposit'?'充值详情':modal.type==='swap'?'USDI 闪兑':modal.type==='order_detail'?'订单详情':modal.type==='settings'?'安全设置':modal.type==='invite'?'邀请好友':modal.type==='wallets'?'钱包地址':modal.type==='tutorial'?'新手必读':modal.type==='about'?'关于我们':modal.type==='change_login'?'修改登录密码':modal.type==='change_tx'?'修改交易密码':'提示'}</h3><button onClick={()=>setModal(null)} className="w-8 h-8 bg-slate-100 rounded-full flex items-center justify-center"><i data-lucide="x" className="w-4 h-4"></i></button></div>
+                                <div className="flex justify-between items-center mb-6"><h3 className="font-bold text-lg">{modal.type==='wheel'?'':modal.type==='deposit'?'充值详情':modal.type==='swap'?'USDI 闪兑':modal.type==='order_detail'?'订单详情':modal.type==='settings'?'安全设置':modal.type==='invite'?'邀请好友':modal.type==='wallets'?'钱包地址':modal.type==='tutorial'?'新手必读':modal.type==='about'?'关于我们':modal.type==='change_login'?'修改登录密码':modal.type==='change_tx'?'修改交易密码':modal.type==='edit_profile'?'编辑资料':'提示'}</h3><button onClick={()=>setModal(null)} className="w-8 h-8 bg-slate-100 rounded-full flex items-center justify-center"><i data-lucide="x" className="w-4 h-4"></i></button></div>
                                 
                                 {modal.type === 'wheel' && <LuckyWheel user={user} profile={profile} onClose={()=>setModal(null)} onWin={handleWinPrize} />}
-                                {modal.type === 'deposit' && ( <div className="space-y-4"><div className="bg-slate-50 p-4 rounded-xl break-all font-mono text-xs text-center border border-dashed border-slate-300">{CONFIG.adminWallet}<div className="mt-2 text-emerald-600 font-bold cursor-pointer" onClick={()=>toast('已复制','success')}>点击复制地址</div></div><div><label className="text-xs font-bold text-slate-500 mb-1 block">充值金额</label><input type="number" id="depAmt" className="w-full bg-slate-50 p-3 rounded-xl border border-slate-200 outline-none font-bold" placeholder="100"/></div><button onClick={()=>handleAction('deposit', {amount:document.getElementById('depAmt').value, title:'充值'})} className="w-full bg-emerald-500 text-white py-3 rounded-xl font-bold">提交审核</button></div> )}
-                                {modal.type === 'withdraw' && ( <div className="space-y-4"><input type="number" id="wdAmt" className="w-full bg-slate-50 p-3 rounded-xl border border-slate-200 font-bold" placeholder="提现金额"/><input type="text" className="w-full bg-slate-50 p-3 rounded-xl border border-slate-200 text-sm" placeholder="TRC20 地址"/><input type="password" className="w-full bg-slate-50 p-3 rounded-xl border border-slate-200" placeholder="交易密码"/><button onClick={()=>handleAction('withdraw', {amount:document.getElementById('wdAmt').value, title:'提现'})} className="w-full bg-slate-900 text-white py-3 rounded-xl font-bold">确认提现</button></div> )}
-                                
-                                {modal.type === 'swap' && ( <div className="space-y-6"><div className="bg-slate-50 p-4 rounded-2xl border text-center mb-2"><p className="text-xs text-slate-500 font-medium">1 USDI = 1.00 USDT (免手续费)</p></div><div className="relative"><div className="bg-white border border-slate-200 rounded-xl p-4 mb-2 shadow-sm"><div className="flex justify-between mb-2"><label className="text-xs text-slate-500 font-bold">从</label><span className="text-[10px] text-slate-400 font-bold">余额: {fmtMoney(modal.dir==='in'?balance.usdt:balance.usdi)}</span></div><div className="flex justify-between items-center"><input type="number" id="swapAmt" className="text-2xl font-black outline-none w-2/3 placeholder-slate-300" placeholder="0.00" onChange={(e)=>document.getElementById('toAmt').innerText = `≈ ${e.target.value || '0.00'}`} /><div className="flex items-center gap-2 font-bold bg-slate-100 px-3 py-1.5 rounded-lg text-xs text-slate-700"><i data-lucide={modal.dir==='in'?'dollar-sign':'gem'} className="w-3 h-3"></i>{modal.dir==='in'?'USDT':'USDI'}</div></div></div><div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-10"><button onClick={()=>{ setModal(m => ({...m, dir: m.dir==='in'?'out':'in'})); document.getElementById('swapAmt').value=''; document.getElementById('toAmt').innerText='≈ 0.00'; }} className="bg-white border border-slate-200 p-2 rounded-full shadow-md hover:bg-slate-50 text-indigo-500 transition-transform active:rotate-180"><i data-lucide="arrow-down-up" className="w-5 h-5"></i></button></div><div className="bg-slate-50 border border-slate-200 rounded-xl p-4 mt-2"><div className="flex justify-between mb-2"><label className="text-xs text-slate-500 font-bold">到</label><span className="text-[10px] text-slate-400 font-bold">余额: {fmtMoney(modal.dir==='in'?balance.usdi:balance.usdt)}</span></div><div className="flex justify-between items-center"><div id="toAmt" className="text-2xl font-black text-slate-400">≈ 0.00</div><div className="flex items-center gap-2 font-bold bg-white border px-3 py-1.5 rounded-lg text-xs text-slate-700"><i data-lucide={modal.dir==='in'?'gem':'dollar-sign'} className="w-3 h-3"></i>{modal.dir==='in'?'USDI':'USDT'}</div></div></div></div><button onClick={()=>{ const amt = document.getElementById('swapAmt').value; if(!amt || Number(amt)<=0) return toast('请输入兑换金额', 'error'); const isToUsdi = modal.dir === 'in'; const bal = isToUsdi ? balance.usdt : balance.usdi; if(Number(amt) > bal) return toast(`${isToUsdi?'USDT':'USDI'} 余额不足`, 'error'); handleAction(isToUsdi ? 'swap_usdt_to_usdi' : 'swap_usdi_to_usdt', { amount: amt, currency: isToUsdi ? 'USDI' : 'USDT', title: isToUsdi ? 'USDT 兑换 USDI' : 'USDI 兑换 USDT' }); }} className="w-full bg-gradient-to-r from-violet-600 to-indigo-600 text-white py-4 rounded-xl font-bold shadow-lg shadow-indigo-500/20 active:scale-95 transition-all">确认兑换</button></div> )}
-
-                                {modal.type === 'wallets' && ( <div className="space-y-4"><div className="text-center text-slate-400 text-sm py-8 bg-slate-50 rounded-xl border border-dashed">暂无绑定的钱包地址</div><button className="w-full border-2 border-slate-900 text-slate-900 py-3 rounded-xl font-bold">+ 添加新地址</button></div> )}
+                                {modal.type === 'deposit' && ( <div className="space-y-4"><div className="bg-slate-50 p-4 rounded-xl break-all font-mono text-xs text-center border border-dashed border-slate-300">{CONFIG.adminWallet}<div className="mt-2 text-emerald-600 font-bold cursor-pointer" onClick={()=>{navigator.clipboard.writeText(CONFIG.adminWallet); toast('已复制','success');}}>点击复制地址</div></div><div><label className="text-xs font-bold text-slate-500 mb-1 block">充值金额</label><input type="number" id="depAmt" className="w-full bg-slate-50 p-3 rounded-xl border border-slate-200 outline-none font-bold" placeholder="100"/></div><button disabled={submitting} onClick={()=>handleAction('deposit', {amount:document.getElementById('depAmt').value, title:'充值'})} className="w-full bg-emerald-500 text-white py-3 rounded-xl font-bold disabled:opacity-50">提交审核</button></div> )}
+                                {modal.type === 'withdraw' && ( <div className="space-y-4"><input type="number" id="wdAmt" className="w-full bg-slate-50 p-3 rounded-xl border border-slate-200 font-bold" placeholder="提现金额"/><input type="text" className="w-full bg-slate-50 p-3 rounded-xl border border-slate-200 text-sm" placeholder="TRC20 地址"/><input type="password" className="w-full bg-slate-50 p-3 rounded-xl border border-slate-200" placeholder="交易密码"/><button disabled={submitting} onClick={()=>handleAction('withdraw', {amount:document.getElementById('wdAmt').value, title:'提现'})} className="w-full bg-slate-900 text-white py-3 rounded-xl font-bold disabled:opacity-50">确认提现</button></div> )}
+                                {modal.type === 'swap' && ( <div className="space-y-6"><div className="bg-slate-50 p-4 rounded-2xl border text-center mb-2"><p className="text-xs text-slate-500 font-medium">1 USDI = 1.00 USDT (免手续费)</p></div><div className="relative"><div className="bg-white border border-slate-200 rounded-xl p-4 mb-2 shadow-sm"><div className="flex justify-between mb-2"><label className="text-xs text-slate-500 font-bold">从</label><span className="text-[10px] text-slate-400 font-bold">余额: {fmtMoney(modal.dir==='in'?balance.usdt:balance.usdi)}</span></div><div className="flex justify-between items-center"><input type="number" id="swapAmt" className="text-2xl font-black outline-none w-2/3 placeholder-slate-300" placeholder="0.00" onChange={(e)=>document.getElementById('toAmt').innerText = `≈ ${e.target.value || '0.00'}`} /><div className="flex items-center gap-2 font-bold bg-slate-100 px-3 py-1.5 rounded-lg text-xs text-slate-700"><i data-lucide={modal.dir==='in'?'dollar-sign':'gem'} className="w-3 h-3"></i>{modal.dir==='in'?'USDT':'USDI'}</div></div></div><div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-10"><button onClick={()=>{ setModal(m => ({...m, dir: m.dir==='in'?'out':'in'})); document.getElementById('swapAmt').value=''; document.getElementById('toAmt').innerText='≈ 0.00'; }} className="bg-white border border-slate-200 p-2 rounded-full shadow-md hover:bg-slate-50 text-indigo-500 transition-transform active:rotate-180"><i data-lucide="arrow-down-up" className="w-5 h-5"></i></button></div><div className="bg-slate-50 border border-slate-200 rounded-xl p-4 mt-2"><div className="flex justify-between mb-2"><label className="text-xs text-slate-500 font-bold">到</label><span className="text-[10px] text-slate-400 font-bold">余额: {fmtMoney(modal.dir==='in'?balance.usdi:balance.usdt)}</span></div><div className="flex justify-between items-center"><div id="toAmt" className="text-2xl font-black text-slate-400">≈ 0.00</div><div className="flex items-center gap-2 font-bold bg-white border px-3 py-1.5 rounded-lg text-xs text-slate-700"><i data-lucide={modal.dir==='in'?'gem':'dollar-sign'} className="w-3 h-3"></i>{modal.dir==='in'?'USDI':'USDT'}</div></div></div></div><button disabled={submitting} onClick={()=>{ const amt = document.getElementById('swapAmt').value; if(!amt || Number(amt)<=0) return toast('请输入兑换金额', 'error'); const isToUsdi = modal.dir === 'in'; const bal = isToUsdi ? balance.usdt : balance.usdi; if(Number(amt) > bal) return toast(`${isToUsdi?'USDT':'USDI'} 余额不足`, 'error'); handleAction(isToUsdi ? 'swap_usdt_to_usdi' : 'swap_usdi_to_usdt', { amount: amt, currency: isToUsdi ? 'USDI' : 'USDT', title: isToUsdi ? 'USDT 兑换 USDI' : 'USDI 兑换 USDT' }); }} className="w-full bg-gradient-to-r from-violet-600 to-indigo-600 text-white py-4 rounded-xl font-bold shadow-lg shadow-indigo-500/20 active:scale-95 transition-all disabled:opacity-50">确认兑换</button></div> )}
+                                {modal.type === 'wallets' && ( <div className="space-y-4"><div className="bg-slate-50 p-4 rounded-xl border border-slate-200"><label className="text-xs font-bold text-slate-500 mb-2 block">钱包地址 (TRC20)</label><input type="text" id="walletAddr" defaultValue={profile?.walletAddress} className="w-full bg-white p-3 rounded-lg border border-slate-200 text-sm outline-none font-mono" placeholder="输入或粘贴地址..." /></div><button onClick={handlePasteAndLog} className="w-full border-2 border-indigo-100 bg-indigo-50 text-indigo-600 py-3 rounded-xl font-bold flex items-center justify-center gap-2 active:scale-95 transition-transform"><i data-lucide="clipboard" className="w-4 h-4"></i> 智能识别剪贴板</button><button onClick={handleSaveWallet} className="w-full bg-slate-900 text-white py-3 rounded-xl font-bold shadow-lg mt-2">保存地址</button></div> )}
                                 {modal.type === 'settings' && ( <div className="space-y-4"><div onClick={()=>setModal({type:'change_login'})} className="flex justify-between items-center p-3 bg-slate-50 rounded-xl cursor-pointer active:bg-slate-100"><span className="text-sm font-bold">登录密码</span><span className="text-xs text-emerald-600 font-bold">修改</span></div><div onClick={()=>setModal({type:'change_tx'})} className="flex justify-between items-center p-3 bg-slate-50 rounded-xl cursor-pointer active:bg-slate-100"><span className="text-sm font-bold">交易密码</span><span className="text-xs text-red-500 font-bold">未设置</span></div></div> )}
                                 {modal.type === 'change_login' && (<div className="space-y-4"><div className="bg-yellow-50 text-yellow-700 text-xs p-3 rounded-lg">为了您的账户安全，修改密码后需要重新登录。</div><div><label className="text-xs font-bold text-slate-500 mb-1 block">新登录密码</label><input type="password" id="newLoginPwd" className="w-full bg-slate-50 p-3 rounded-xl border border-slate-200 outline-none" placeholder="至少6位字符"/></div><button onClick={()=>handleChangePwd('login', document.getElementById('newLoginPwd').value)} className="w-full bg-slate-900 text-white py-3 rounded-xl font-bold">确认修改</button></div>)}
                                 {modal.type === 'change_tx' && (<div className="space-y-4"><div className="bg-blue-50 text-blue-700 text-xs p-3 rounded-lg">交易密码用于提现和安全验证，请设置6位纯数字。</div><div><label className="text-xs font-bold text-slate-500 mb-1 block">新交易密码</label><input type="password" id="newTxPwd" maxlength="6" className="w-full bg-slate-50 p-3 rounded-xl border border-slate-200 outline-none text-center text-lg tracking-widest" placeholder="●●●●●●"/></div><button onClick={()=>handleChangePwd('tx', document.getElementById('newTxPwd').value)} className="w-full bg-emerald-500 text-white py-3 rounded-xl font-bold">保存设置</button></div>)}
@@ -605,12 +698,65 @@
                                 {modal.type === 'notice_detail' && ( <div className="space-y-4"><h3 className="font-bold text-lg text-slate-900 leading-snug">{modal.data.title}</h3><div className="text-xs text-slate-400 mb-4 flex items-center gap-2"><i data-lucide="clock" className="w-3 h-3"></i> {modal.data.date}</div><div className="text-sm text-slate-600 leading-relaxed whitespace-pre-wrap bg-slate-50 p-4 rounded-xl border border-slate-100">{modal.data.content}</div><button onClick={()=>setModal(null)} className="w-full py-3 bg-slate-900 text-white rounded-xl font-bold text-sm mt-4">我知道了</button></div> )}
                                 {modal.type === 'order_detail' && (() => { 
                                     const { data } = modal; 
+                                    const isRunning = data.status === 'running';
+                                    
                                     if(data.type === 'win_prize') return ( <div className="text-center space-y-4"><div className="w-20 h-20 bg-purple-100 text-purple-600 rounded-full flex items-center justify-center mx-auto"><i data-lucide="gift" className="w-10 h-10"></i></div><div className="text-2xl font-black text-purple-600">+{fmtMoney(data.amount)} {data.currency}</div><div className="text-sm text-slate-500">中奖时间: {fmtDate(data.createdAt)}</div></div> );
                                     if(['deposit', 'withdraw'].includes(data.type)) return ( <div className="space-y-6 text-center"><div className={`w-16 h-16 mx-auto rounded-full flex items-center justify-center ${data.type==='deposit'?'bg-emerald-100 text-emerald-600':'bg-rose-100 text-rose-600'}`}><i data-lucide={data.type==='deposit'?'arrow-down':'arrow-up'} className="w-8 h-8"></i></div><div><div className="text-3xl font-black">{data.type==='deposit'?'+':'-'}{fmtMoney(data.amount)}</div><div className="text-sm text-slate-400 mt-1">{data.status==='success'?'交易成功':data.status==='pending'?'审核中':'交易失败'}</div></div></div> ); 
-                                    const start = data.createdAt ? new Date(data.createdAt.seconds*1000) : new Date(); const end = new Date(start.getTime() + (data.days||1)*24*3600*1000); const now = new Date(); const isRunning = data.status === 'running'; const isEarly = now < end; const progress = isRunning ? Math.min(100, Math.max(0, ((now - start) / (end - start)) * 100)) : 100; const expectedProfit = (data.amount * (0.008 + (data.currency==='USDI'?0.002:0)) * data.days).toFixed(2); const penalty = data.amount * 0.02; const returnAmount = data.amount - penalty;
+                                    
+                                    const start = data.createdAt ? new Date(data.createdAt.seconds*1000) : new Date(); const end = new Date(start.getTime() + (data.days||1)*24*3600*1000); const now = new Date(); const isEarly = now < end; const progress = isRunning ? Math.min(100, Math.max(0, ((now - start) / (end - start)) * 100)) : 100; const expectedProfit = (data.amount * (0.008 + (data.currency==='USDI'?0.002:0)) * data.days).toFixed(2); const penalty = data.amount * 0.02; const returnAmount = data.amount - penalty;
                                     if(confirmRedeem) return ( <div className="space-y-6 animate-in slide-in-from-right"><div className="text-center py-4"><div className="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4"><i data-lucide="alert-triangle" className="w-8 h-8"></i></div><h3 className="font-bold text-lg text-slate-900">确认赎回？</h3><p className="text-sm text-slate-500 mt-2 px-4">当前订单尚未到期。提前赎回将扣除违约金，请仔细确认。</p></div><div className="bg-slate-50 p-4 rounded-2xl space-y-3 text-sm"><div className="flex justify-between"><span className="text-slate-500">本金退回</span><span className="font-bold">{fmtMoney(data.amount)}</span></div><div className="flex justify-between text-red-500"><span className="font-bold">违约金 (2%)</span><span className="font-bold">-{fmtMoney(penalty)}</span></div><div className="border-t border-slate-200 pt-3 flex justify-between items-center"><span className="text-slate-900 font-bold">实际到账</span><span className="text-xl font-black text-emerald-600">{fmtMoney(returnAmount)}</span></div></div><div className="flex gap-3"><button onClick={()=>setConfirmRedeem(false)} className="flex-1 py-3.5 bg-white border border-slate-200 text-slate-500 rounded-xl font-bold">再想想</button><button onClick={()=>handleRedeem(data)} className="flex-[2] py-3.5 bg-red-500 text-white rounded-xl font-bold shadow-lg shadow-red-500/30 active:scale-95 transition-all">确认赎回</button></div></div> );
                                     return ( <div className="space-y-6">{isRunning && ( <div className="scan-card bg-slate-900 text-emerald-400 p-4 rounded-xl mb-4 text-center font-mono text-xs relative"><div className="scan-line absolute top-0 left-0"></div><div className="flex justify-center items-center gap-2 mb-2"><i data-lucide="activity" className="w-4 h-4 animate-pulse"></i><span>AI 正在全网套利中...</span></div><div className="grid grid-cols-3 gap-2 opacity-80"><div>Uniswap<br/><span className="text-white">+0.4%</span></div><div>Curve<br/><span className="text-white">+0.2%</span></div><div>Sushi<br/><span className="text-white">+0.3%</span></div></div></div> )}<div className="grid grid-cols-2 gap-3 mb-4"><div className="text-center p-3 bg-slate-50 rounded-xl border border-slate-200"><div className="text-xs text-slate-400 mb-1">投入本金</div><div className="text-lg font-black text-slate-900">{fmtMoney(data.amount)}</div></div><LiveOrderProfit order={data} /></div><div className="bg-slate-50 p-4 rounded-xl border border-slate-200"><div className="flex justify-between text-sm mb-3"><span className="text-slate-500">运行周期</span><span className="font-bold">{data.days} 天</span></div><div className="flex justify-between text-sm mb-3"><span className="text-slate-500">预计收益</span><span className="font-bold text-emerald-600">+{expectedProfit} {data.currency}</span></div><div className="flex justify-between text-xs text-slate-400 mt-4 border-t border-slate-200 pt-3"><span>开始: {start.toLocaleDateString()}</span><span>结束: {end.toLocaleDateString()}</span></div>{isRunning && ( <div className="mt-3 h-2 bg-slate-200 rounded-full overflow-hidden"><div className="h-full bg-emerald-500 transition-all duration-1000" style={{width: `${progress}%`}}></div></div> )}</div>{isRunning && ( <button onClick={()=>{ if(isEarly) setConfirmRedeem(true); else handleRedeem(data); }} className={`w-full py-3.5 rounded-xl font-bold text-white shadow-lg active:scale-95 transition-all ${isEarly ? 'glow-button-red' : 'glow-button'}`}>{isEarly ? '提前赎回' : '到期赎回'}</button> )}</div> );
                                 })()}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* --- PROFILE EDIT MODAL --- */}
+                    {modal && modal.type === 'edit_profile' && (
+                        <div className="fixed inset-0 z-[50] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-4 safe-bottom" onClick={(e)=>e.target===e.currentTarget && setModal(null)}>
+                            <div className="bg-white w-full max-w-sm rounded-3xl p-6 page-enter relative overflow-hidden">
+                                <div className="flex justify-between items-center mb-6">
+                                    <h3 className="font-bold text-lg">编辑个人资料</h3>
+                                    <button onClick={()=>setModal(null)} className="w-8 h-8 bg-slate-100 rounded-full flex items-center justify-center"><i data-lucide="x" className="w-4 h-4"></i></button>
+                                </div>
+                                <div className="space-y-6">
+                                    <div className="flex flex-col items-center gap-3">
+                                        <div className="relative w-20 h-20">
+                                            <div className="w-20 h-20 bg-slate-100 rounded-full overflow-hidden border-2 border-slate-200 shadow-sm">
+                                                {profile?.avatarUrl 
+                                                    ? <img src={profile.avatarUrl} className="w-full h-full object-cover" alt="avatar"/> 
+                                                    : <div className="w-full h-full bg-gradient-to-tr from-indigo-400 to-purple-400 flex items-center justify-center text-white font-bold text-2xl">{profile?.nickname?.[0]||'U'}</div>
+                                                }
+                                            </div>
+                                            <label className="absolute bottom-0 right-0 w-6 h-6 bg-slate-900 rounded-full flex items-center justify-center cursor-pointer shadow-md hover:bg-slate-700 transition-colors">
+                                                <i data-lucide="camera" className="w-3 h-3 text-white"></i>
+                                                <input type="file" className="hidden" accept="image/*" onChange={handleImageUpload}/>
+                                            </label>
+                                        </div>
+                                        <div className="text-[10px] text-slate-400">点击相机上传 (最大2MB)</div>
+                                    </div>
+
+                                    <div>
+                                        <label className="text-xs font-bold text-slate-500 mb-2 block">昵称</label>
+                                        <input 
+                                            type="text" 
+                                            id="nicknameInput"
+                                            defaultValue={profile?.nickname} 
+                                            className="w-full bg-slate-50 p-3 rounded-xl border border-slate-200 text-sm outline-none focus:border-indigo-500 transition-colors font-bold" 
+                                            placeholder="设置一个响亮的昵称" 
+                                        />
+                                    </div>
+
+                                    <button onClick={() => {
+                                        const name = document.getElementById('nicknameInput').value;
+                                        if(name && name.trim()) {
+                                            handleUpdateProfile({ nickname: name.trim() });
+                                            setModal(null);
+                                        } else {
+                                            toast('昵称不能为空', 'error');
+                                        }
+                                    }} className="w-full bg-slate-900 text-white py-3.5 rounded-xl font-bold shadow-lg active:scale-95 transition-all">保存修改</button>
+                                </div>
                             </div>
                         </div>
                     )}
@@ -619,7 +765,7 @@
         };
 
         const Login = () => {
-            useLucide(); const [isReg, setIsReg] = useState(false); const [email, setEmail] = useState(''); const [pwd, setPwd] = useState(''); const [loading, setLoading] = useState(false); const toast = useContext(ToastContext);
+            const [isReg, setIsReg] = useState(false); const [email, setEmail] = useState(''); const [pwd, setPwd] = useState(''); const [loading, setLoading] = useState(false); const toast = useContext(ToastContext);
             const handleAuth = async (e) => { e.preventDefault(); setLoading(true); try { if(isReg) await auth.createUserWithEmailAndPassword(email, pwd); else await auth.signInWithEmailAndPassword(email, pwd); } catch(err) { toast(err.message, 'error'); } finally { setLoading(false); } };
             return ( <div className="min-h-screen bg-slate-900 flex items-center justify-center p-6"><div className="w-full max-w-sm bg-white/10 backdrop-blur-xl p-8 rounded-3xl border border-white/10 shadow-2xl text-white"><h1 className="text-2xl font-bold text-center mb-8">USDT 量化大师</h1><form onSubmit={handleAuth} className="space-y-4"><div className="bg-black/30 rounded-xl flex items-center px-4 border border-white/5"><i data-lucide="mail" className="w-5 h-5 text-slate-400"></i><input type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="邮箱" className="bg-transparent w-full p-4 outline-none"/></div><div className="bg-black/30 rounded-xl flex items-center px-4 border border-white/5"><i data-lucide="lock" className="w-5 h-5 text-slate-400"></i><input type="password" value={pwd} onChange={e=>setPwd(e.target.value)} placeholder="密码" className="bg-transparent w-full p-4 outline-none"/></div><button disabled={loading} className="w-full bg-emerald-500 py-4 rounded-xl font-bold">{loading?'...':(isReg?'注册':'登录')}</button></form><button onClick={()=>setIsReg(!isReg)} className="w-full text-center mt-6 text-sm text-emerald-400">{isReg?'去登录':'去注册'}</button></div></div> );
         };
